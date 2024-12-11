@@ -1,0 +1,6 @@
+## Interface: 30300
+## Title: MoveNameplates
+## Author: Macumba
+## Version: 1.0
+## Notes: Moves nameplates higher on the screen.
+MoveNameplates.lua
