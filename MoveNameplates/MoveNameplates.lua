@@ -8,7 +8,7 @@ me.Plates = Plates;
 local PlatesVisible = {};
 me.PlatesVisible = PlatesVisible;
 
-local VERTICAL_OFFSET = 50
+local VERTICAL_OFFSET = 20
 
 local function ResetPoint(Plate, Region, Point, RelFrame, ...)
     if (RelFrame == Plate) then
