@@ -1,18 +1,22 @@
 ﻿local AddOnName, me = ...;
 _VirtualPlates = me;
+
+-- Main frame anchored to WorldFrame
 me.Frame = CreateFrame("Frame", nil, WorldFrame);
 
--- Removed scaling and kept only upward offset
+-- The storage tables
 local Plates = {};
-me.Plates = Plates;
 local PlatesVisible = {};
+
+me.Plates = Plates;
 me.PlatesVisible = PlatesVisible;
 
-local VERTICAL_OFFSET = 20
+local VERTICAL_OFFSET = 50;
+
 
 local function ResetPoint(Plate, Region, Point, RelFrame, ...)
     if (RelFrame == Plate) then
-        local point, xOfs, yOfs = ...
+        local point, xOfs, yOfs = ...;
         Region:SetPoint(Point, Plates[Plate], point, xOfs, yOfs + VERTICAL_OFFSET);
     end
 end
@@ -57,6 +61,7 @@ local function ReparentRegions(Plate, ...)
 end
 
 local function PlateAdd(Plate)
+    -- Create the "Visual" frame
     local Visual = CreateFrame("Frame", nil, Plate);
     Plates[Plate] = Visual;
 
@@ -75,49 +80,86 @@ local function PlateAdd(Plate)
     end
 end
 
-local OriginalWorldFrameGetChildren = WorldFrame.GetChildren
 
-local function PlatesScan(...)
-    for Index = 1, select("#", ...) do
-        local Frame = select(Index, ...);
-        if (not Plates[Frame]) then
-            local Region = Frame:GetRegions();
-            if (Region and Region:GetObjectType() == "Texture" and Region:GetTexture() == [[Interface\TargetingFrame\UI-TargetingFrame-Flash]]) then
-                PlateAdd(Frame);
+local useRetailAPI = (C_NamePlate and C_NamePlate.GetNamePlateForUnit and C_NamePlate.GetNamePlates);
+
+
+if not useRetailAPI then
+    local OriginalWorldFrameGetChildren = WorldFrame.GetChildren
+
+    local function PlatesScan(...)
+        for Index = 1, select("#", ...) do
+            local Frame = select(Index, ...);
+            if (not Plates[Frame]) then
+                local Region = Frame:GetRegions();
+                if (Region and Region:GetObjectType() == "Texture"
+                   and Region:GetTexture() == [[Interface\TargetingFrame\UI-TargetingFrame-Flash]]) then
+                    PlateAdd(Frame);
+                end
             end
         end
     end
+
+    local ChildCount = 0;
+    function me:WorldFrameOnUpdate(Elapsed)
+        local NewChildCount = self:GetNumChildren();
+        if (ChildCount ~= NewChildCount) then
+            ChildCount = NewChildCount;
+            PlatesScan(OriginalWorldFrameGetChildren(self));
+        end
+    end
+
+    WorldFrame:HookScript("OnUpdate", me.WorldFrameOnUpdate);
+
+    -- Optionally override WorldFrame:GetChildren
+    local Children = {};
+    local function ReplaceChildren(...)
+        local Count = select("#", ...);
+        for Index = 1, Count do
+            local Frame = select(Index, ...);
+            Children[Index] = Plates[Frame] or Frame;
+        end
+        for Index = Count + 1, #Children do
+            Children[Index] = nil;
+        end
+        return unpack(Children);
+    end
+
+    function WorldFrame:GetChildren(...)
+        return ReplaceChildren(OriginalWorldFrameGetChildren(self, ...))
+    end
+
+else
+    local EventFrame = CreateFrame("Frame");
+    EventFrame:RegisterEvent("NAME_PLATE_UNIT_ADDED");
+    EventFrame:RegisterEvent("NAME_PLATE_UNIT_REMOVED");
+    EventFrame:RegisterEvent("NAME_PLATE_CREATED");
+
+    EventFrame:SetScript("OnEvent", function(self, event, arg1)
+        if event == "NAME_PLATE_CREATED" then
+            
+
+        elseif event == "NAME_PLATE_UNIT_ADDED" then
+            -- arg1 is the unitID, e.g. "nameplate1"
+            local plate = C_NamePlate.GetNamePlateForUnit(arg1);
+            if plate and (not Plates[plate]) then
+                -- This is a new plate we haven't re-parented yet
+                PlateAdd(plate);
+            end
+
+        elseif event == "NAME_PLATE_UNIT_REMOVED" then
+            -- arg1 is the unitID
+            local plate = C_NamePlate.GetNamePlateForUnit(arg1);
+            if plate and Plates[plate] then
+                -- Force the OnHide logic to run
+                me.PlateOnHide(plate);
+            end
+        end
+    end)
 end
 
-local ChildCount, NewChildCount = 0;
-function me:WorldFrameOnUpdate(Elapsed)
-    NewChildCount = self:GetNumChildren();
-    if (ChildCount ~= NewChildCount) then
-        ChildCount = NewChildCount;
-        PlatesScan(OriginalWorldFrameGetChildren(self));
-    end
-end
-
-local Children = {};
-local function ReplaceChildren(...)
-    local Count = select("#", ...);
-    for Index = 1, Count do
-        local Frame = select(Index, ...);
-        Children[Index] = Plates[Frame] or Frame;
-    end
-    for Index = Count + 1, #Children do
-        Children[Index] = nil;
-    end
-    return unpack(Children);
-end
-
-function WorldFrame:GetChildren(...)
-    return ReplaceChildren(OriginalWorldFrameGetChildren(self, ...))
-end
 
 function me.Frame:OnEvent(Event, ...)
-    -- No events needed
+    -- in case we need an event
 end
-
-WorldFrame:HookScript("OnUpdate", me.WorldFrameOnUpdate);
 me.Frame:SetScript("OnEvent", me.Frame.OnEvent);
